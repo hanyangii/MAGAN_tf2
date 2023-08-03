@@ -1,6 +1,6 @@
 import tensorflow as tf
 import os
-from .utils import lrelu, nameop, tbn, obn
+from utils import lrelu, nameop, tbn, obn
 
 
 
@@ -29,11 +29,11 @@ class MAGAN(object):
             self._restore(restore_folder)
             return
 
-        self.xb1 = tf.placeholder(tf.float32, shape=[None, self.dim_b1], name='xb1')
-        self.xb2 = tf.placeholder(tf.float32, shape=[None, self.dim_b2], name='xb2')
+        self.xb1 = tf.compat.v1.placeholder(tf.float32, shape=[None, self.dim_b1], name='xb1')
+        self.xb2 = tf.compat.v1.placeholder(tf.float32, shape=[None, self.dim_b2], name='xb2')
 
-        self.lr = tf.placeholder(tf.float32, shape=[], name='lr')
-        self.is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
+        self.lr = tf.compat.v1.placeholder(tf.float32, shape=[], name='lr')
+        self.is_training = tf.compat.v1.placeholder(tf.bool, shape=[], name='is_training')
 
         self._build()
         self.init_session(limit_gpu_fraction=limit_gpu_fraction, no_gpu=no_gpu)
@@ -55,9 +55,9 @@ class MAGAN(object):
         """Initialize graph variables."""
         if not sess: sess = self.sess
 
-        self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
+        self.saver = tf.train.Saver(tf.compat.v1.global_variables(), max_to_keep=1)
 
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.compat.v1.global_variables_initializer())
 
         return self.saver
 
@@ -115,8 +115,8 @@ class MAGAN(object):
         self._build_loss_G()
         self.loss_D = nameop(self.loss_D, 'loss_D')
         self.loss_G = nameop(self.loss_G, 'loss_G')
-        tf.add_to_collection('losses', self.loss_D)
-        tf.add_to_collection('losses', self.loss_G)
+        tf.compat.v1.add_to_collection('losses', self.loss_D)
+        tf.compat.v1.add_to_collection('losses', self.loss_G)
 
     def _build_loss_D(self):
         """Discriminator loss."""
@@ -136,29 +136,29 @@ class MAGAN(object):
         losses.append(tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D1_probs_G, labels=tf.ones_like(self.D1_probs_G))))
         losses.append(tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D2_probs_G, labels=tf.ones_like(self.D2_probs_G))))
         # reconstruction losses
-        losses.append(tf.reduce_mean((self.xb1 - self.xb1_reconstructed)**2))
-        losses.append(tf.reduce_mean((self.xb2 - self.xb2_reconstructed)**2))
+        losses.append(tf.math.reduce_mean((self.xb1 - self.xb1_reconstructed)**2))
+        losses.append(tf.math.reduce_mean((self.xb2 - self.xb2_reconstructed)**2))
         # correspondences losses
-        losses.append(1 * tf.reduce_mean(self.correspondence_loss(self.xb1, self.Gb2)))
-        losses.append(1 * tf.reduce_mean(self.correspondence_loss(self.xb2, self.Gb1)))
+        losses.append(1 * tf.math.reduce_mean(self.correspondence_loss(self.xb1, self.Gb2)))
+        losses.append(1 * tf.math.reduce_mean(self.correspondence_loss(self.xb2, self.Gb1)))
 
-        self.loss_G = tf.reduce_mean(losses)
+        self.loss_G = tf.math.reduce_mean(losses)
 
     def _build_optimization(self):
         """Build optimization components."""
-        Gvars = [tv for tv in tf.global_variables() if 'G12' in tv.name or 'G21' in tv.name]
-        Dvars = [tv for tv in tf.global_variables() if 'D1' in tv.name or 'D2' in tv.name]
+        Gvars = [tv for tv in tf.compat.v1.global_variables() if 'G12' in tv.name or 'G21' in tv.name]
+        Dvars = [tv for tv in tf.compat.v1.global_variables() if 'D1' in tv.name or 'D2' in tv.name]
 
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        update_ops = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)
         G_update_ops = [op for op in update_ops if 'G12' in op.name or 'G21' in op.name]
         D_update_ops = [op for op in update_ops if 'D1' in op.name or 'D2' in op.name]
 
         with tf.control_dependencies(G_update_ops):
-            optG = tf.train.AdamOptimizer(self.lr, beta1=.5, beta2=.99)
+            optG = tf.compat.v1.train.AdamOptimizer(self.lr, beta1=.5, beta2=.99)
             self.train_op_G = optG.minimize(self.loss_G, var_list=Gvars, name='train_op_G')
 
         with tf.control_dependencies(D_update_ops):
-            optD = tf.train.AdamOptimizer(self.lr, beta1=.5, beta2=.99)
+            optD = tf.compat.v1.train.AdamOptimizer(self.lr, beta1=.5, beta2=.99)
             self.train_op_D = optD.minimize(self.loss_D, var_list=Dvars, name='train_op_D')
 
     def train(self, xb1, xb2):
@@ -188,7 +188,7 @@ class MAGAN(object):
 
     def get_loss_names(self):
         """Return a string for the names of the loss values."""
-        losses = [tns.name[:-2].replace('loss_', '').split('/')[-1] for tns in tf.get_collection('losses')]
+        losses = [tns.name[:-2].replace('loss_', '').split('/')[-1] for tns in tf.compat.v1.get_collection('losses')]
         return "Losses: {}".format(' '.join(losses))
 
     def get_loss(self, xb1, xb2):
@@ -197,7 +197,7 @@ class MAGAN(object):
                 tbn('xb2:0'): xb2,
                 tbn('is_training:0'): False}
 
-        ls = [tns for tns in tf.get_collection('losses')]
+        ls = [tns for tns in tf.compat.v1.get_collection('losses')]
         losses = self.sess.run(ls, feed_dict=feed)
 
         lstring = ' '.join(['{:.3f}'.format(loss) for loss in losses])
@@ -219,12 +219,12 @@ class Generator(object):
 
     def __call__(self, x, reuse=False):
         """Perform the feedforward for the generator."""
-        with tf.variable_scope(self.name):
-            h1 = tf.layers.dense(x, 200, activation=self.activation, reuse=reuse, name='h1')
-            h2 = tf.layers.dense(h1, 100, activation=self.activation, reuse=reuse, name='h2')
-            h3 = tf.layers.dense(h2, 50, activation=self.activation, reuse=reuse, name='h3')
+        #with tf.variable_scope(self.name):
+        h1 = tf.keras.layers.Dense( 200, activation=self.activation,  name=self.name+'_h1')(x)
+        h2 = tf.keras.layers.Dense( 100, activation=self.activation, name=self.name+'_h2')(h1)
+        h3 = tf.keras.layers.Dense(50, activation=self.activation, name=self.name+'_h3')(h2)
 
-            out = tf.layers.dense(h3, self.output_dim, activation=None, reuse=reuse, name='out')
+        out = tf.keras.layers.Dense(self.output_dim, activation=None, name=self.name+'_out')(h3)
 
         return out
 
@@ -240,14 +240,14 @@ class Discriminator(object):
 
     def __call__(self, x, reuse=False):
         """Perform the feedforward for the discriminator."""
-        with tf.variable_scope(self.name):
-            h1 = tf.layers.dense(x, 800, activation=self.activation, reuse=reuse, name='h1')
-            h2 = tf.layers.dense(h1, 400, activation=self.activation, reuse=reuse, name='h2')
-            h3 = tf.layers.dense(h2, 200, activation=self.activation, reuse=reuse, name='h3')
-            h4 = tf.layers.dense(h3, 100, activation=self.activation, reuse=reuse, name='h4')
-            h5 = tf.layers.dense(h4, 50, activation=self.activation, reuse=reuse, name='h5')
+        #with tf.variable_scope(self.name):
+        h1 = tf.keras.layers.Dense(800, activation=self.activation,  name=self.name+'_h1')(x)
+        h2 = tf.keras.layers.Dense( 400, activation=self.activation,  name=self.name+'_h2')(h1)
+        h3 = tf.keras.layers.Dense( 200, activation=self.activation, name=self.name+'_h3')(h2)
+        h4 = tf.keras.layers.Dense( 100, activation=self.activation,  name=self.name+'_h4')(h3)
+        h5 = tf.keras.layers.Dense(50, activation=self.activation,  name=self.name+'_h5')(h4)
 
-            out = tf.layers.dense(h5, 1, activation=None, reuse=reuse, name='out')
+        out = tf.keras.layers.Dense( 1, activation=None, name=self.name+'_out')(h5)
 
         return out
 

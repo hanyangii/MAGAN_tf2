@@ -88,7 +88,7 @@ for i in range(1, 100000):
             axes[1, 0].scatter(xb2[labels2_ == lab, 0], xb2[labels2_ == lab, 1], s=45, alpha=.5, cmap=matplotlib.cm.jet, c='r', marker=marker)
             axes[1, 1].scatter(Gb1[labels2_ == lab, 0], Gb1[labels2_ == lab, 1], s=45, alpha=.5, cmap=matplotlib.cm.jet, c='b', marker=marker)
         fig.canvas.draw()
-        plt.pause(1)
+        plt.savefig("../generated_data_epoch%d.png"%i, dpi=300, bbox_inches="tight")
 
 
 
