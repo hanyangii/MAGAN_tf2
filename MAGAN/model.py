@@ -1,5 +1,5 @@
 import tensorflow as tf
-import os
+import os, sys
 from utils import lrelu, nameop, tbn, obn
 
 
@@ -42,20 +42,20 @@ class MAGAN(object):
     def init_session(self, limit_gpu_fraction=.4, no_gpu=False):
         """Initialize the session."""
         if no_gpu:
-            config = tf.ConfigProto(device_count={'GPU': 0})
-            self.sess = tf.Session(config=config)
+            config = tf.compat.v1.ConfigProto(device_count={'GPU': 0})
+            self.sess = tf.compat.v1.Session(config=config)
         elif limit_gpu_fraction:
-            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=limit_gpu_fraction)
-            config = tf.ConfigProto(gpu_options=gpu_options)
-            self.sess = tf.Session(config=config)
+            gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=limit_gpu_fraction)
+            config = tf.compat.v1.ConfigProto(gpu_options=gpu_options)
+            self.sess = tf.compat.v1.Session(config=config)
         else:
-            self.sess = tf.Session()
+            self.sess = tf.compat.v1.Session()
 
     def graph_init(self, sess=None):
         """Initialize graph variables."""
         if not sess: sess = self.sess
 
-        self.saver = tf.train.Saver(tf.compat.v1.global_variables(), max_to_keep=1)
+        self.saver = tf.compat.v1.train.Saver(tf.compat.v1.global_variables(), max_to_keep=1)
 
         sess.run(tf.compat.v1.global_variables_initializer())
 
@@ -115,8 +115,10 @@ class MAGAN(object):
         self._build_loss_G()
         self.loss_D = nameop(self.loss_D, 'loss_D')
         self.loss_G = nameop(self.loss_G, 'loss_G')
+        #self.loss_corr = nameop(self.loss_corr, "loss_corr")
         tf.compat.v1.add_to_collection('losses', self.loss_D)
         tf.compat.v1.add_to_collection('losses', self.loss_G)
+        #tf.compat.v1.add_to_collection('losses', self.loss_corr)
 
     def _build_loss_D(self):
         """Discriminator loss."""
@@ -124,9 +126,11 @@ class MAGAN(object):
         # the true examples
         losses.append(tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D1_probs_z, labels=tf.ones_like(self.D1_probs_z))))
         losses.append(tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D2_probs_z, labels=tf.ones_like(self.D2_probs_z))))
+
         # the generated examples
         losses.append(tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D1_probs_G, labels=tf.zeros_like(self.D1_probs_G))))
         losses.append(tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D2_probs_G, labels=tf.zeros_like(self.D2_probs_G))))
+
         self.loss_D = tf.reduce_mean(losses)
 
     def _build_loss_G(self):
@@ -135,12 +139,15 @@ class MAGAN(object):
         # fool the discriminator losses
         losses.append(tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D1_probs_G, labels=tf.ones_like(self.D1_probs_G))))
         losses.append(tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D2_probs_G, labels=tf.ones_like(self.D2_probs_G))))
+
         # reconstruction losses
         losses.append(tf.math.reduce_mean((self.xb1 - self.xb1_reconstructed)**2))
         losses.append(tf.math.reduce_mean((self.xb2 - self.xb2_reconstructed)**2))
+
         # correspondences losses
         losses.append(1 * tf.math.reduce_mean(self.correspondence_loss(self.xb1, self.Gb2)))
         losses.append(1 * tf.math.reduce_mean(self.correspondence_loss(self.xb2, self.Gb1)))
+        #self.loss_corr = 1 * tf.math.reduce_mean(self.correspondence_loss(self.xb1, self.Gb2)) + 1 * tf.math.reduce_mean(self.correspondence_loss(self.xb2, self.Gb1))
 
         self.loss_G = tf.math.reduce_mean(losses)
 
@@ -154,11 +161,11 @@ class MAGAN(object):
         D_update_ops = [op for op in update_ops if 'D1' in op.name or 'D2' in op.name]
 
         with tf.control_dependencies(G_update_ops):
-            optG = tf.compat.v1.train.AdamOptimizer(self.lr, beta1=.5, beta2=.99)
+            optG = tf.compat.v1.train.AdamOptimizer(self.lr*10, beta1=.5, beta2=.99)
             self.train_op_G = optG.minimize(self.loss_G, var_list=Gvars, name='train_op_G')
 
         with tf.control_dependencies(D_update_ops):
-            optD = tf.compat.v1.train.AdamOptimizer(self.lr, beta1=.5, beta2=.99)
+            optD = tf.compat.v1.train.AdamOptimizer(self.lr*.0001, beta1=.5, beta2=.99)
             self.train_op_D = optD.minimize(self.loss_D, var_list=Dvars, name='train_op_D')
 
     def train(self, xb1, xb2):
@@ -197,11 +204,10 @@ class MAGAN(object):
                 tbn('xb2:0'): xb2,
                 tbn('is_training:0'): False}
 
-        ls = [tns for tns in tf.compat.v1.get_collection('losses')]
+        ls = [tns for tns in tf.compat.v1.get_collection ('losses')]
         losses = self.sess.run(ls, feed_dict=feed)
 
-        lstring = ' '.join(['{:.3f}'.format(loss) for loss in losses])
-
+        lstring = ' '.join(['{:.2E}'.format(loss) for loss in losses])
         return lstring
 
 
